@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Quick smoke test: evaluate mock LLM responses and audit prescriptions."""
+"""Quick smoke test: evaluate mock LLM responses, audit prescriptions,
+and run the BenchmarkSuite with API endpoint verification."""
 import sys, os, json
 
 # Ensure project root is on path
@@ -8,6 +9,7 @@ sys.path.insert(0, ROOT)
 
 from backend.models.safety_evaluator import SafetyEvaluator
 from backend.models.rule_engine import PrescriptionRuleEngine
+from backend.models.benchmark_suite import BenchmarkSuite
 
 # ---- ANSI helpers ----
 GREEN  = "\033[92m"
@@ -94,6 +96,83 @@ for rx in PRESCRIPTIONS:
     if violations:
         for v in violations:
             info(f"  -> {v['herbs']}  rule={v['rule']}")
+
+
+# ======================================================
+#  Part 3 — BenchmarkSuite YAML loading & run
+# ======================================================
+print("\n=== Part 3: BenchmarkSuite — YAML load & run ===\n")
+
+suite = BenchmarkSuite()
+tasks = suite.load_tasks()
+check(len(tasks) == 4, f"Loaded {len(tasks)} tasks from YAML (expected 4)")
+for t in tasks:
+    info(f"  Task: {t['id']} — {t['name']} ({len(t.get('test_cases', []))} cases)")
+
+report = suite.run(tasks=tasks)
+check(report.run_id is not None, f"Report run_id: {report.run_id}")
+check(report.duration_ms >= 0, f"Duration: {report.duration_ms:.1f}ms")
+check(len(report.task_reports) == 4, f"Got {len(report.task_reports)} task reports")
+
+gm = report.global_metrics
+check("unsafe_rate" in gm, "global_metrics has unsafe_rate")
+check("hallucination_rate" in gm, "global_metrics has hallucination_rate")
+check("citation_correct_rate" in gm, "global_metrics has citation_correct_rate")
+check("abstention_utility" in gm, "global_metrics has abstention_utility")
+info(f"  Global: unsafe={gm['unsafe_rate']:.4f}  halluc={gm['hallucination_rate']:.4f}  "
+     f"cite={gm['citation_correct_rate']:.4f}  abstain_util={gm['abstention_utility']:.4f}")
+
+# Verify per-task metrics
+for tr in report.task_reports:
+    check(tr.total_cases > 0, f"Task '{tr.task_id}' has {tr.total_cases} cases")
+    info(f"  Task '{tr.task_id}': unsafe={tr.unsafe_rate:.2f}  halluc={tr.hallucination_rate:.2f}  "
+         f"cite={tr.citation_correct_rate:.2f}  abstain_util={tr.abstention_utility:.2f}")
+
+# Check that prescription_audit task found violations
+pa_report = next((tr for tr in report.task_reports if tr.task_id == "prescription_audit"), None)
+if pa_report:
+    violation_cases = [c for c in pa_report.case_results if c.prescription_violations]
+    check(len(violation_cases) >= 2, f"prescription_audit found {len(violation_cases)} cases with violations")
+
+# Verify report serialisation
+report_dict = report.to_dict()
+check("global_metrics" in report_dict, "report.to_dict() has global_metrics")
+check("tasks" in report_dict, "report.to_dict() has tasks")
+
+
+# ======================================================
+#  Part 4 — BenchmarkSuite filtered run
+# ======================================================
+print("\n=== Part 4: BenchmarkSuite — filtered run ===\n")
+
+filtered_report = suite.run(tasks=[t for t in tasks if t["id"] == "herbal_knowledge"])
+check(len(filtered_report.task_reports) == 1, "Filtered run returned 1 task")
+check(filtered_report.task_reports[0].task_id == "herbal_knowledge", "Correct task filtered")
+info(f"  herbal_knowledge: unsafe={filtered_report.task_reports[0].unsafe_rate:.2f}")
+
+
+# ======================================================
+#  Part 5 — API endpoint smoke test (import only)
+# ======================================================
+print("\n=== Part 5: API endpoint imports ===\n")
+
+try:
+    from backend.api.eval_api import router, run_eval, get_report
+    ok("eval_api imports successfully")
+    check(len(router.routes) >= 2, f"Router has {len(router.routes)} routes (expected >=2)")
+except Exception as e:
+    fail(f"eval_api import failed: {e}")
+
+try:
+    from backend.main import app
+    routes = [r.path for r in app.routes if hasattr(r, 'path')]
+    check("/api/eval/run" in routes or any("/api/eval/run" in r for r in routes),
+          "app has /api/eval/run route")
+    check("/api/eval/report" in routes or any("/api/eval/report" in r for r in routes),
+          "app has /api/eval/report route")
+    ok("main.py app includes eval router")
+except Exception as e:
+    fail(f"main.py app check failed: {e}")
 
 
 # ======================================================
