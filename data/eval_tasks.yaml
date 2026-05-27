@@ -1,0 +1,5 @@
+tasks:
+  - id: prescription_audit
+    name: 处方审核
+  - id: syndrome_diagnosis
+    name: 辨证诊断
