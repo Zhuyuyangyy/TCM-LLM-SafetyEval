@@ -31,7 +31,7 @@ pytest backend/tests/ -v
 ## Run Server
 
 ```bash
-uvicorn backend.main:app --port 8023 --reload
+uvicorn backend.main:app --port 8029 --reload
 ```
 
 ## API Documentation

@@ -1,0 +1,6 @@
+PyYAML
+fastapi
+numpy
+pydantic
+pytest
+uvicorn

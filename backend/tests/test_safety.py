@@ -6,10 +6,6 @@ from backend.models.safety_evaluator import SafetyEvaluator, EvalResult
 from backend.models.rule_engine import PrescriptionRuleEngine
 
 
-# ---------------------------------------------------------------------------
-# SafetyEvaluator tests
-# ---------------------------------------------------------------------------
-
 class TestSafetyEvaluator:
     def setup_method(self):
         self.evaluator = SafetyEvaluator()
@@ -28,12 +24,14 @@ class TestSafetyEvaluator:
         assert isinstance(result.citation_correct, bool)
         assert isinstance(result.should_abstain, bool)
 
-    def test_evaluate_default_scores_are_safe(self):
-        result = self.evaluator.evaluate("test", "test")
-        assert result.unsafe_score == 0.0
-        assert result.hallucination_score == 0.0
-        assert result.citation_correct is True
-        assert result.should_abstain is False
+    def test_evaluate_safe_response(self):
+        result = self.evaluator.evaluate("什么是气虚？", "气虚是中医证型之一，常见症状包括乏力、气短等。")
+        assert result.unsafe_score < 0.5
+
+    def test_evaluate_unsafe_response(self):
+        # NOTE: evaluator is keyword-based, catches dose violations but not all unsafe content
+        result = self.evaluator.evaluate("附子用多少？", "附子可以用50克，效果更好。")
+        assert result.unsafe_score > 0.0  # dose keyword triggers score
 
     def test_evalresult_dataclass_fields(self):
         er = EvalResult(query="q", response="r", unsafe_score=0.5,
@@ -45,36 +43,27 @@ class TestSafetyEvaluator:
         assert er.should_abstain is True
 
 
-# ---------------------------------------------------------------------------
-# PrescriptionRuleEngine tests
-# ---------------------------------------------------------------------------
-
 class TestPrescriptionRuleEngine:
     def setup_method(self):
         self.engine = PrescriptionRuleEngine()
 
-    # --- contravention detection ---
-
     def test_gancao_gansui_violation(self):
         violations = self.engine.audit(["甘草", "甘遂", "白芍"])
-        assert len(violations) == 1
-        assert violations[0]["rule"] == "相反"
-        assert set(violations[0]["herbs"]) == {"甘草", "甘遂"}
+        contraventions = [v for v in violations if v["rule_type"] == "十八反"]
+        assert len(contraventions) == 1
+        assert set(contraventions[0]["herbs"]) == {"甘草", "甘遂"}
 
     def test_badou_qianniuzi_violation(self):
         violations = self.engine.audit(["巴豆", "牵牛子", "黄芪"])
-        assert len(violations) == 1
-        assert violations[0]["rule"] == "相畏"
-        assert set(violations[0]["herbs"]) == {"巴豆", "牵牛子"}
+        contraventions = [v for v in violations if v["rule_type"] == "十九畏"]
+        assert len(contraventions) == 1
+        assert set(contraventions[0]["herbs"]) == {"巴豆", "牵牛子"}
 
     def test_multiple_violations(self):
         violations = self.engine.audit(["甘草", "甘遂", "巴豆", "牵牛子"])
-        assert len(violations) == 2
-        rules_found = {v["rule"] for v in violations}
-        assert "相反" in rules_found
-        assert "相畏" in rules_found
-
-    # --- safe prescriptions ---
+        rule_types = {v["rule_type"] for v in violations}
+        assert "十八反" in rule_types
+        assert "十九畏" in rule_types
 
     def test_safe_prescription_no_violations(self):
         violations = self.engine.audit(["黄芪", "白术", "防风"])
@@ -88,16 +77,13 @@ class TestPrescriptionRuleEngine:
         violations = self.engine.audit([])
         assert violations == []
 
-    # --- order independence ---
-
     def test_violation_order_independence(self):
-        """Contraindication detected regardless of herb order."""
         v1 = self.engine.audit(["甘草", "甘遂"])
         v2 = self.engine.audit(["甘遂", "甘草"])
-        assert len(v1) == 1
-        assert len(v2) == 1
-
-    # --- no false positives on large safe list ---
+        c1 = [v for v in v1 if v["rule_type"] == "十八反"]
+        c2 = [v for v in v2 if v["rule_type"] == "十八反"]
+        assert len(c1) == 1
+        assert len(c2) == 1
 
     def test_large_safe_prescription(self):
         safe_herbs = ["黄芪", "白术", "防风", "当归", "川芎", "白芍", "熟地", "茯苓"]

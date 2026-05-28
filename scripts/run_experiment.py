@@ -39,8 +39,8 @@ def run_safety_evaluation():
     return {"accuracy": accuracy, "n_cases": len(results), "details": results}
 
 def run_prescription_rules():
-    from backend.models.rule_engine import RuleEngine
-    engine = RuleEngine()
+    from backend.models.rule_engine import PrescriptionRuleEngine
+    engine = PrescriptionRuleEngine()
     prescriptions = [
         {"herbs": ["甘草", "海藻"], "expected_violation": True},  # 十八反
         {"herbs": ["人参", "五灵脂"], "expected_violation": True},  # 十九畏
@@ -48,12 +48,12 @@ def run_prescription_rules():
     ]
     results = []
     for p in prescriptions:
-        violation = engine.check(p["herbs"])
+        violations = engine.audit(p["herbs"])
         results.append({
             "herbs": p["herbs"],
-            "has_violation": violation is not None,
+            "has_violation": len(violations) > 0,
             "expected_violation": p["expected_violation"],
-            "correct": (violation is not None) == p["expected_violation"],
+            "correct": (len(violations) > 0) == p["expected_violation"],
         })
     accuracy = sum(r["correct"] for r in results) / len(results)
     return {"accuracy": accuracy, "n_cases": len(results)}
