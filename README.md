@@ -27,6 +27,49 @@ The system provides a multi-dimensional evaluation pipeline combining rule-based
 
 ---
 
+## Important Limitations and Disclaimers
+
+> **Please read before using or citing this benchmark.**
+
+1. **No real LLM evaluation included.** The current release evaluates only
+   predefined (hand-crafted) responses from YAML test cases and mock responses
+   in the red team suite.  No actual LLM API (GPT-4, Claude, Qwen, etc.) has
+   been queried.  All reported metrics reflect the evaluator's scoring logic on
+   static data, not the safety behaviour of any production LLM.  A future
+   release should integrate live LLM API calls to produce meaningful
+   evaluation results.
+
+2. **Small test corpus (38 cases).** The YAML test file contains only 38 cases
+   across 8 task categories (range: 2-10 cases per task).  This is far below
+   the sample size needed for statistically reliable safety claims.  Results
+   should be treated as preliminary proof-of-concept, not as definitive
+   benchmarks.  The roadmap targets 100+ cases per category.
+
+3. **Circular red team testing.** The 15 red team adversarial cases include
+   hand-crafted `mock_response` strings that were written to be safe and
+   correct.  These responses are then evaluated by the same rule-based
+   safety evaluator that checks for the very keywords the mock responses
+   were designed to include (e.g., refusal language, warning terms).  This
+   creates a circular validation loop: the test data is authored to pass the
+   evaluator, so the pass rate reflects author intent, not model capability.
+   Genuine red team testing requires evaluating *real* LLM responses to
+   adversarial prompts.
+
+4. **ECE calibration metric uses semantic proxies.** The Expected Calibration
+   Error (ECE) computation uses `hallucination_score` as a stand-in for model
+   confidence and `unsafe_score` as a stand-in for correctness.  These are
+   semantically distinct concepts.  ECE values should be interpreted as rough
+   heuristics, not as rigorous calibration measurements.  See the
+   `CalibrationMetric` class docstring for details.
+
+5. **Keyword-based evaluation only.** All scoring (safety, hallucination,
+   citation) is based on keyword matching and regex patterns, not on semantic
+   understanding.  This approach will miss nuanced unsafe content that avoids
+   the specific keywords and may flag benign content that happens to contain
+   them.
+
+---
+
 ## Key Features
 
 ### Prescription Rule Engine
@@ -233,6 +276,45 @@ TCM-LLM-SafetyEval/
 |-- pyproject.toml              # Project metadata and dependencies
 |-- REPRODUCE.md                # Reproduction instructions
 ```
+
+---
+
+## References
+
+The following works informed the design of this benchmark:
+
+### LLM Safety Evaluation
+
+- Weidinger, L., Mellor, J., Rauh, M., et al. (2021). "Ethical and social risks of harm from Language Models." *arXiv preprint arXiv:2112.04359*.
+- Liang, P., Bommasani, R., Lee, T., et al. (2022). "Holistic Evaluation of Language Models." *arXiv preprint arXiv:2211.09110*.
+- Wang, Y., Zhong, W., Li, L., et al. (2023). "Aligning Large Language Models with Human: A Survey." *arXiv preprint arXiv:2307.12966*.
+- Guo, Z., Jin, R., Liu, C., et al. (2024). "Evaluating Large Language Models: A Comprehensive Survey." *arXiv preprint arXiv:2310.19736*.
+- Sun, H., Zhang, Z., He, J., et al. (2024). "SafetyBench: Evaluating the Safety of Large Language Models." *Proceedings of ACL 2024*.
+
+### TCM Toxicology and Safety
+
+- 国家药典委员会. (2020).《中华人民共和国药典》(2020年版). 中国医药科技出版社.
+- 高学敏 主编. (2007).《中药学》(第二版). 中国中医药出版社.
+- 钟赣生 主编. (2012).《中药学》(全国中医药行业高等教育"十二五"规划教材). 中国中医药出版社.
+- 张廷模 主编. (2016).《中药学》(第十版). 中国中医药出版社.
+- 国家中医药管理局. (2010).《中药学临床药论》. 中国中医药出版社.
+
+### LLM Applications in Healthcare / TCM
+
+- Thirunavukarasu, A. J., Ting, D. S. J., Elangovan, K., et al. (2023). "Large language models in medicine." *Nature Medicine*, 29(8), 1930-1940.
+- Wang, X., Gong, Z., Wang, G., et al. (2023). "ChatGPT Performs on the Chinese National Medical Licensing Examination." *Journal of Medical Systems*, 47(1), 86.
+- Liu, J., Wang, C., Liu, S., et al. (2024). "TCM-SD: A Benchmark for Probing the Syndrome Differentiation of Traditional Chinese Medicine." *Proceedings of AAAI 2024*.
+
+---
+
+## Paper Status
+
+> **Status: Draft / Pre-submission.** The accompanying SCI paper
+> (`docs/SCI_Paper_Skeleton.md`) is currently a skeleton with sections yet to
+> be filled.  The target journals are *Qingbao Kexue* (情报科学) or
+> *Shuju Fenxi yu Zhishi Faxian* (数据分析与知识发现).  A full paper with
+> real LLM evaluation results, expanded corpus, and clinical expert
+> validation is required before submission.
 
 ---
 
